@@ -1,0 +1,16 @@
+# Основные зависимости
+ffmpeg-python>=0.2.0
+pandas>=2.0.0
+click>=8.0.0
+
+# Dev зависимости (установка: uv pip install -r requirements-dev.txt)
+# pytest>=6.0.0
+# black>=22.0.0
+# isort>=5.10.0
+
+# Установка с UV:
+# uv pip install -r requirements.txt
+# 
+# Или создание окружения:
+# uv venv
+# uv pip install -r requirements.txt
