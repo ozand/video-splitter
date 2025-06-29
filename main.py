@@ -69,64 +69,84 @@ def parse_markdown_table(table_content: str) -> List[Dict]:
     data_rows = []
     for line in lines[header_line + 2:]:  # +2 чтобы пропустить заголовок и разделитель
         if line.strip() and '|' in line:
-            # Получаем все ячейки (включая пустые)
+            # Получаем все ячейки, сохраняя пустые для правильного подсчета позиций
             all_cells = [cell.strip() for cell in line.split('|')]
-            # Убираем пустые ячейки в начале и конце
-            cells = [c for c in all_cells if c]
             
-            # Проверяем количество ячеек (может отличаться из-за пустых столбцов)
-            if len(cells) >= 4:  # минимум нужно 4 столбца для наших данных
-                # Находим позиции данных в зависимости от количества столбцов
-                if len(cells) == len(headers):
-                    # Полная строка
-                    scene_id = cells[scene_id_idx]
-                    source_file = cells[source_file_idx] 
-                    start_time = cells[start_time_idx]
-                    end_time = cells[end_time_idx]
-                elif len(cells) == len(headers) - 1:
-                    # Пропущен первый столбец (обычно "Блок")
-                    scene_id = cells[scene_id_idx - 1] if scene_id_idx > 0 else ""
-                    source_file = cells[source_file_idx - 1] if source_file_idx > 0 else ""
-                    start_time = cells[start_time_idx - 1] if start_time_idx > 0 else ""
-                    end_time = cells[end_time_idx - 1] if end_time_idx > 0 else ""
-                else:
-                    # Пытаемся найти столбцы по содержимому
-                    scene_id = ""
-                    source_file = ""
-                    start_time = ""
-                    end_time = ""
-                    
-                    for cell in cells:
-                        if re.search(r'`[^`]+`', cell):  # ID сцены в кавычках
-                            if not scene_id:
-                                scene_id = cell
-                        elif re.search(r'\d{2}:\d{2}', cell):  # Время
-                            if not start_time:
-                                start_time = cell
-                            elif not end_time:
-                                end_time = cell
-                        elif cell.endswith('.mp4') or cell.endswith('.avi') or cell.endswith('.mov'):
-                            if not source_file:
-                                source_file = cell
+            # Убираем только первую и последнюю пустые ячейки (обрамляющие |)
+            if all_cells and not all_cells[0]:
+                all_cells.pop(0)
+            if all_cells and not all_cells[-1]:
+                all_cells.pop()
+            
+            # Ищем данные по индексам, учитывая что пустые ячейки могут быть в середине
+            scene_id = ""
+            source_file = ""
+            start_time = ""
+            end_time = ""
+            
+            # Безопасно получаем значения по индексам
+            if scene_id_idx < len(all_cells):
+                scene_id = all_cells[scene_id_idx]
+            if source_file_idx < len(all_cells):
+                source_file = all_cells[source_file_idx]
+            if start_time_idx < len(all_cells):
+                start_time = all_cells[start_time_idx]
+            if end_time_idx < len(all_cells):
+                end_time = all_cells[end_time_idx]
+            
+            # Если не удалось найти по индексам, пытаемся найти по содержимому
+            if not (scene_id and source_file and start_time and end_time):
+                non_empty_cells = [c for c in all_cells if c]
+                temp_scene_id = ""
+                temp_source_file = ""
+                temp_start_time = ""
+                temp_end_time = ""
                 
-                # Извлекаем ID сцены из обратных кавычек
-                scene_id_match = re.search(r'`([^`]+)`', scene_id)
-                if scene_id_match:
-                    scene_id = scene_id_match.group(1)
+                for cell in non_empty_cells:
+                    if re.search(r'`[^`]+`', cell):  # ID сцены в кавычках
+                        if not temp_scene_id:
+                            temp_scene_id = cell
+                        elif cell.endswith('.mp4') or '.mp4' in cell:  # Видеофайл может быть в кавычках
+                            if not temp_source_file:
+                                temp_source_file = cell
+                    elif re.search(r'\d{2}:\d{2}', cell):  # Время
+                        if not temp_start_time:
+                            temp_start_time = cell
+                        elif not temp_end_time:
+                            temp_end_time = cell
+                    elif (cell.endswith('.mp4') or cell.endswith('.avi') or cell.endswith('.mov') or 
+                          cell.endswith('.mkv') or cell.endswith('.wmv') or cell.endswith('.flv') or cell.endswith('.webm')):
+                        if not temp_source_file:
+                            temp_source_file = cell
                 
-                # Убираем обратные кавычки из имени файла, если они есть
-                source_file_match = re.search(r'`([^`]+)`', source_file)
-                if source_file_match:
-                    source_file = source_file_match.group(1)
-                
-                # Проверяем, что все поля заполнены
-                if source_file and start_time and end_time and scene_id:
-                    data_rows.append({
-                        'scene_id': scene_id,
-                        'source_file': source_file,
-                        'start_time': start_time,
-                        'end_time': end_time
-                    })
+                # Используем найденные значения, если основные пустые
+                if not scene_id:
+                    scene_id = temp_scene_id
+                if not source_file:
+                    source_file = temp_source_file
+                if not start_time:
+                    start_time = temp_start_time
+                if not end_time:
+                    end_time = temp_end_time
+            
+            # Извлекаем ID сцены из обратных кавычек
+            scene_id_match = re.search(r'`([^`]+)`', scene_id)
+            if scene_id_match:
+                scene_id = scene_id_match.group(1)
+            
+            # Убираем обратные кавычки из имени файла, если они есть
+            source_file_match = re.search(r'`([^`]+)`', source_file)
+            if source_file_match:
+                source_file = source_file_match.group(1)
+            
+            # Проверяем, что все поля заполнены
+            if source_file and start_time and end_time and scene_id:
+                data_rows.append({
+                    'scene_id': scene_id,
+                    'source_file': source_file,
+                    'start_time': start_time,
+                    'end_time': end_time
+                })
     
     return data_rows
 
